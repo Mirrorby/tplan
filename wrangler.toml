@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "telegram-planner-db"
-database_id = "6b01aa9f-2168-43cd-9a0c-b255388fb9f9"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 
 # Каждые 5 минут проверяем, кому пора отправить утренний план или вечерний отчёт.
 # Более частый тик не нужен: время у пользователя задаётся с точностью до минуты,
