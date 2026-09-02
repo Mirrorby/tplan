@@ -1,0 +1,5 @@
+# Скопируй этот файл в .dev.vars для локальной разработки (wrangler dev).
+# .dev.vars не должен коммититься в git — он уже в .gitignore.
+
+TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
+TELEGRAM_WEBHOOK_SECRET=any_random_string_you_choose

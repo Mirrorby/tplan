@@ -1,0 +1,20 @@
+name = "telegram-planner"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "telegram-planner-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Каждые 5 минут проверяем, кому пора отправить утренний план или вечерний отчёт.
+# Более частый тик не нужен: время у пользователя задаётся с точностью до минуты,
+# 5-минутное окно — разумный компромисс между точностью и лимитами free-плана.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Секреты (TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET) задаются через:
+#   wrangler secret put TELEGRAM_BOT_TOKEN
+#   wrangler secret put TELEGRAM_WEBHOOK_SECRET
+# и НЕ хранятся в этом файле.
