@@ -10,11 +10,13 @@ import {
   handleTitleInput,
   handleWhenChoice,
   handleCustomDateInput,
+  handlePostponeDateInput,
   handleRecurrenceChoice,
   handleRecurrenceDetailInput,
 } from './handlers/addTask.js';
 import { handleDone, handleCancel, handlePostponeStart, handlePostponeTo } from './handlers/taskActions.js';
 import { handleOpenCard } from './handlers/taskCard.js';
+import { showRulesList, handleDeleteRule } from './handlers/rules.js';
 import { parse } from './lib/callbackData.js';
 import { mainMenuKeyboard } from './lib/keyboards.js';
 import { addDays, todayInTimezone } from './lib/timezone.js';
@@ -30,6 +32,7 @@ export function createBot(env: Env): Bot {
         '/today — план на сегодня\n' +
         '/add — добавить задачу\n' +
         '/plan — меню\n' +
+        '/rules — повторяющиеся задачи\n' +
         '/settings — настройки\n' +
         '/help — эта справка',
     );
@@ -38,6 +41,7 @@ export function createBot(env: Env): Bot {
   bot.command('today', async (ctx) => withUser(ctx, env, (user) => showToday(ctx, env, user)));
   bot.command('add', async (ctx) => withUser(ctx, env, (user) => startAddTask(ctx, env, user)));
   bot.command('settings', async (ctx) => withUser(ctx, env, (user) => showSettings(ctx, user)));
+  bot.command('rules', async (ctx) => withUser(ctx, env, (user) => showRulesList(ctx, env, user)));
 
   bot.command('plan', async (ctx) =>
     withUser(ctx, env, async (user) => {
@@ -87,6 +91,11 @@ export function createBot(env: Env): Bot {
       await showSettings(ctx, user);
       return;
     }
+    if (data === 'rules') {
+      await ctx.answerCallbackQuery();
+      await showRulesList(ctx, env, user);
+      return;
+    }
 
     // Структурированные действия над задачами: "action:kind:id" или "action:payload"
     try {
@@ -96,7 +105,11 @@ export function createBot(env: Env): Bot {
           await handleDone(ctx, env, user, cb);
           return;
         case 'cancel':
-          await handleCancel(ctx, env, user, cb);
+          if (cb.kind === 'rule') {
+            await handleDeleteRule(ctx, env, user, cb);
+          } else {
+            await handleCancel(ctx, env, user, cb);
+          }
           return;
         case 'postpone':
           await handlePostponeStart(ctx, env, user, cb);
@@ -155,6 +168,9 @@ export function createBot(env: Env): Bot {
         return;
       case 'awaiting_custom_date':
         await handleCustomDateInput(ctx, env, user, text);
+        return;
+      case 'awaiting_postpone_date':
+        await handlePostponeDateInput(ctx, env, user, text);
         return;
       case 'awaiting_recurrence':
         await handleRecurrenceDetailInput(ctx, env, user, text);

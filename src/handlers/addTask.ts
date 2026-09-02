@@ -5,11 +5,12 @@ import {
   setConversationState,
   clearConversationState,
 } from '../db/conversationStates.js';
-import { createTask } from '../db/tasks.js';
-import { createRule } from '../db/recurringRules.js';
+import { createTask, postponeTask } from '../db/tasks.js';
+import { createRule, postponeInstance } from '../db/recurringRules.js';
 import { dateChoiceKeyboard, recurrenceChoiceKeyboard } from '../lib/keyboards.js';
 import { addDays, todayInTimezone } from '../lib/timezone.js';
 import { showPlanForDate } from './today.js';
+import { rerenderPlanMessage } from './taskActions.js';
 
 const WEEKDAY_ALIASES: Record<string, number> = {
   вс: 0, пн: 1, вт: 2, ср: 3, чт: 4, пт: 5, сб: 6,
@@ -115,6 +116,39 @@ export async function handleRecurrenceChoice(
   } else {
     await ctx.reply('В какой день недели? Напиши один из: пн, вт, ср, чт, пт, сб, вс');
   }
+}
+
+export async function handlePostponeDateInput(ctx: Context, env: Env, user: User, text: string): Promise<void> {
+  const dateStr = text.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    await ctx.reply('Не похоже на дату. Формат: ГГГГ-ММ-ДД, например 2026-09-05.');
+    return;
+  }
+
+  const stored = await getConversationState(env, user.id);
+  const taskId = stored?.draft.postpone_task_id;
+  const kind = stored?.draft.postpone_kind;
+  if (!taskId || !kind) {
+    await ctx.reply('Сессия истекла, попробуй перенести задачу заново.');
+    await clearConversationState(env, user.id);
+    return;
+  }
+
+  const ok =
+    kind === 'task'
+      ? await postponeTask(env, user.id, taskId, dateStr)
+      : await postponeInstance(env, user.id, taskId, dateStr);
+
+  await clearConversationState(env, user.id);
+
+  if (!ok) {
+    await ctx.reply('Не удалось перенести — возможно, задача уже выполнена или на эту дату уже есть повтор.');
+    return;
+  }
+
+  await ctx.reply(`Перенесено на ${dateStr} ✅`);
+  const today = todayInTimezone(user.timezone);
+  await rerenderPlanMessage(ctx, env, user, today);
 }
 
 export async function handleRecurrenceDetailInput(ctx: Context, env: Env, user: User, text: string): Promise<void> {

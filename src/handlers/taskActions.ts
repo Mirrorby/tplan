@@ -6,6 +6,7 @@ import { buildPlanForDate } from '../lib/plan.js';
 import { renderPlanText, planKeyboard, postponeKeyboard } from '../lib/keyboards.js';
 import { formatHumanDate, addDays, todayInTimezone } from '../lib/timezone.js';
 import type { ParsedCallback } from '../lib/callbackData.js';
+import { setConversationState } from '../db/conversationStates.js';
 
 /**
  * Все операции проверяют user_id вместе с id записи (через getTaskById/getInstanceById,
@@ -25,7 +26,7 @@ async function resolveDate(env: Env, user: User, cb: ParsedCallback): Promise<st
 }
 
 /** Перерисовывает сообщение с планом на месте, вместо отправки нового (раздел 9 ТЗ). */
-async function rerenderPlanMessage(ctx: Context, env: Env, user: User, date: string): Promise<void> {
+export async function rerenderPlanMessage(ctx: Context, env: Env, user: User, date: string): Promise<void> {
   const items = await buildPlanForDate(env, user, date);
   const humanDate = formatHumanDate(date, user.timezone);
   const text = renderPlanText(`**План — ${humanDate}**`, items);
@@ -73,7 +74,7 @@ export async function handleCancel(ctx: Context, env: Env, user: User, cb: Parse
 }
 
 export async function handlePostponeStart(ctx: Context, env: Env, user: User, cb: ParsedCallback): Promise<void> {
-  if (!cb.id || !cb.kind) return;
+  if (!cb.id || (cb.kind !== 'task' && cb.kind !== 'inst')) return;
   await ctx.answerCallbackQuery();
   await ctx.reply('На когда перенести?', { reply_markup: postponeKeyboard(cb.kind, cb.id) });
 }
@@ -91,9 +92,11 @@ export async function handlePostponeTo(
 
   if (mode === 'custom') {
     await ctx.answerCallbackQuery();
+    await setConversationState(env, user.id, 'awaiting_postpone_date', {
+      postpone_task_id: id,
+      postpone_kind: kind,
+    });
     await ctx.reply('Пришли дату в формате ГГГГ-ММ-ДД (например 2026-09-05).');
-    // Состояние диалога для custom-переноса устанавливается в handlers/addTask.ts
-    // через тот же conversation_states механизм — см. startCustomPostpone.
     return;
   }
 

@@ -27,6 +27,25 @@ export async function createRule(
   return rule;
 }
 
+/** Проверяет владельца — не доверяем ID правила без сверки user_id (раздел 45 ТЗ). */
+export async function getRuleById(env: Env, userId: number, ruleId: number): Promise<RecurringRule | null> {
+  const row = await env.DB.prepare('SELECT * FROM recurring_rules WHERE id = ? AND user_id = ?')
+    .bind(ruleId, userId)
+    .first<RecurringRule>();
+  return row ?? null;
+}
+
+/** Мягкое удаление: is_active=0 + deleted_at. Уже созданные task_instances (и история) остаются нетронутыми. */
+export async function deactivateRule(env: Env, userId: number, ruleId: number): Promise<boolean> {
+  const res = await env.DB.prepare(
+    `UPDATE recurring_rules SET is_active = 0, deleted_at = datetime('now')
+     WHERE id = ? AND user_id = ? AND is_active = 1`,
+  )
+    .bind(ruleId, userId)
+    .run();
+  return res.meta.changes > 0;
+}
+
 export async function getActiveRulesForUser(env: Env, userId: number): Promise<RecurringRule[]> {
   const { results } = await env.DB.prepare(
     `SELECT * FROM recurring_rules WHERE user_id = ? AND is_active = 1 AND deleted_at IS NULL`,

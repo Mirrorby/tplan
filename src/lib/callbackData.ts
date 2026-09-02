@@ -12,7 +12,7 @@
  *   "view_day:2026-09-02"  — посмотреть план на другую дату
  */
 
-export type ItemKind = 'task' | 'inst';
+export type ItemKind = 'task' | 'inst' | 'rule';
 export type Action = 'done' | 'open' | 'postpone' | 'cancel' | 'back' | 'view_day' | 'postpone_to' | 'add' | 'noop';
 
 export interface ParsedCallback {
@@ -47,7 +47,7 @@ export function parse(raw: string): ParsedCallback {
 
   const kind = segments[1] as ItemKind;
   const id = Number(segments[2]);
-  if (!['task', 'inst'].includes(kind) || Number.isNaN(id)) {
+  if (!['task', 'inst', 'rule'].includes(kind) || Number.isNaN(id)) {
     throw new Error(`Invalid callback_data: ${raw}`);
   }
   return { action, kind, id };

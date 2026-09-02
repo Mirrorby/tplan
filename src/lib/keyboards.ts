@@ -1,6 +1,12 @@
 import { InlineKeyboard } from 'grammy';
-import type { PlanItem } from '../types.js';
+import type { PlanItem, RecurringRule } from '../types.js';
 import { encode, encodeWithPayload } from './callbackData.js';
+
+const RULE_TYPE_LABEL: Record<string, string> = {
+  daily: 'каждый день',
+  weekdays: 'по дням недели',
+  weekly: 'раз в неделю',
+};
 
 const STATUS_EMOJI: Record<string, string> = {
   pending: '⬜',
@@ -61,6 +67,22 @@ export function recurrenceChoiceKeyboard(): InlineKeyboard {
     .text('Дни недели', 'rec:weekdays')
     .row()
     .text('Раз в неделю', 'rec:weekly');
+}
+
+export function renderRulesText(rules: RecurringRule[]): string {
+  if (rules.length === 0) {
+    return '🔁 Повторяющихся задач пока нет.\n\nСоздать можно через /add → "Повторять".';
+  }
+  const lines = rules.map((r) => `• ${r.title} — ${RULE_TYPE_LABEL[r.rule_type] ?? r.rule_type}`);
+  return `🔁 Повторяющиеся задачи:\n\n${lines.join('\n')}\n\nЧтобы удалить — нажми на задачу ниже.`;
+}
+
+export function rulesListKeyboard(rules: RecurringRule[]): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const r of rules) {
+    kb.text(`🗑 ${r.title}`, encode('cancel', 'rule', r.id)).row();
+  }
+  return kb;
 }
 
 export function mainMenuKeyboard(): InlineKeyboard {

@@ -89,5 +89,5 @@ export interface ConversationDraft {
   weekdays?: number[];
   // id задачи/инстанса, которую переносим (для awaiting_postpone_date)
   postpone_task_id?: number;
-  postpone_kind?: 'task' | 'instance';
+  postpone_kind?: 'task' | 'inst';
 }
