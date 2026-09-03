@@ -1,22 +1,67 @@
 import type { Env, Task, TaskStatus } from '../types.js';
 
+export type CreateTaskOptions = {
+  description?: string | null;
+  source?: 'user' | 'system';
+  programEnrollmentId?: number | null;
+  programItemKey?: string | null;
+};
+
 export async function createTask(
   env: Env,
   userId: number,
   title: string,
   dueDate: string,
-  description: string | null = null,
+  descriptionOrOptions: string | null | CreateTaskOptions = null,
 ): Promise<Task> {
+  const opts: CreateTaskOptions =
+    typeof descriptionOrOptions === 'string' || descriptionOrOptions === null
+      ? { description: descriptionOrOptions }
+      : descriptionOrOptions;
+
   const res = await env.DB.prepare(
-    `INSERT INTO tasks (user_id, title, description, due_date, original_date)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (user_id, title, description, due_date, original_date, source, program_enrollment_id, program_item_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(userId, title, description, dueDate, dueDate)
+    .bind(
+      userId,
+      title,
+      opts.description ?? null,
+      dueDate,
+      dueDate,
+      opts.source ?? 'user',
+      opts.programEnrollmentId ?? null,
+      opts.programItemKey ?? null,
+    )
     .run();
   const id = res.meta.last_row_id;
   const task = await getTaskById(env, userId, Number(id));
   if (!task) throw new Error('Failed to create task');
   return task;
+}
+
+/** Подготовленный statement для createTask — нужен для DB.batch() при установке программ.
+ *  OR IGNORE — подстраховка от дублей (частичный уникальный индекс idx_task_program_item). */
+export function createTaskStatement(
+  env: Env,
+  userId: number,
+  title: string,
+  dueDate: string,
+  opts: CreateTaskOptions = {},
+): D1PreparedStatement {
+  return env.DB.prepare(
+    `INSERT OR IGNORE INTO tasks (user_id, title, description, due_date, original_date, source, program_enrollment_id, program_item_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    userId,
+    title,
+    opts.description ?? null,
+    dueDate,
+    dueDate,
+    opts.source ?? 'system',
+    opts.programEnrollmentId ?? null,
+    opts.programItemKey ?? null,
+  );
 }
 
 /** Всегда проверяем user_id вместе с id — не доверяем ID, пришедшему от клиента (раздел 45 ТЗ). */
@@ -66,6 +111,16 @@ export async function postponeTask(
     .bind(newDate, taskId, userId)
     .run();
   return res.meta.changes > 0;
+}
+
+/** Переводит все pending-задачи enrollment'а (например невыполненные дни вводного курса) в cancelled. */
+export async function cancelPendingTasksForEnrollment(env: Env, enrollmentId: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE tasks SET status = 'cancelled', updated_at = datetime('now')
+     WHERE program_enrollment_id = ? AND status = 'pending'`,
+  )
+    .bind(enrollmentId)
+    .run();
 }
 
 /** Невыполненные задачи, оставшиеся с прошлых дней (для "перенесённых ранее задач", раздел 8 ТЗ). */

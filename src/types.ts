@@ -36,6 +36,8 @@ export interface Task {
   last_postponed_at: string | null;
   created_at: string;
   updated_at: string;
+  program_enrollment_id: number | null;
+  program_item_key: string | null;
 }
 
 export type RuleType = 'daily' | 'weekdays' | 'weekly';
@@ -51,6 +53,9 @@ export interface RecurringRule {
   is_active: number;
   created_at: string;
   deleted_at: string | null;
+  starts_on: string | null; // YYYY-MM-DD — правило не применяется раньше этой даты
+  program_enrollment_id: number | null;
+  program_item_key: string | null;
 }
 
 export interface TaskInstance {
@@ -90,4 +95,21 @@ export interface ConversationDraft {
   // id задачи/инстанса, которую переносим (для awaiting_postpone_date)
   postpone_task_id?: number;
   postpone_kind?: 'task' | 'inst';
+}
+
+// ============ Готовые программы (тренировки, медитации) ============
+
+export type ProgramKey = 'home_workouts_v1' | 'meditation_beginner_v1';
+export type ProgramStatus = 'active' | 'cancelled';
+export type StartMode = 'today' | 'next_monday';
+
+export interface ProgramEnrollment {
+  id: number;
+  user_id: number;
+  program_key: ProgramKey;
+  program_version: number;
+  start_date: string;
+  status: ProgramStatus;
+  created_at: string;
+  cancelled_at: string | null;
 }

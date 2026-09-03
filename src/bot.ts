@@ -17,6 +17,14 @@ import {
 import { handleDone, handleCancel, handlePostponeStart, handlePostponeTo } from './handlers/taskActions.js';
 import { handleOpenCard } from './handlers/taskCard.js';
 import { showRulesList, handleDeleteRule } from './handlers/rules.js';
+import {
+  showProgramsList,
+  showProgramCard,
+  handleInstall,
+  showDisableConfirm,
+  handleDisableYes,
+  handleDisableNo,
+} from './handlers/programs.js';
 import { parse } from './lib/callbackData.js';
 import { mainMenuKeyboard } from './lib/keyboards.js';
 import { addDays, todayInTimezone } from './lib/timezone.js';
@@ -33,6 +41,7 @@ export function createBot(env: Env): Bot {
         '/add — добавить задачу\n' +
         '/plan — меню\n' +
         '/rules — повторяющиеся задачи\n' +
+        '/programs — готовые программы\n' +
         '/settings — настройки\n' +
         '/help — эта справка',
     );
@@ -42,6 +51,7 @@ export function createBot(env: Env): Bot {
   bot.command('add', async (ctx) => withUser(ctx, env, (user) => startAddTask(ctx, env, user)));
   bot.command('settings', async (ctx) => withUser(ctx, env, (user) => showSettings(ctx, user)));
   bot.command('rules', async (ctx) => withUser(ctx, env, (user) => showRulesList(ctx, env, user)));
+  bot.command('programs', async (ctx) => withUser(ctx, env, (user) => showProgramsList(ctx, env, user)));
 
   bot.command('plan', async (ctx) =>
     withUser(ctx, env, async (user) => {
@@ -95,6 +105,39 @@ export function createBot(env: Env): Bot {
       await ctx.answerCallbackQuery();
       await showRulesList(ctx, env, user);
       return;
+    }
+    if (data === 'programs') {
+      await ctx.answerCallbackQuery();
+      await showProgramsList(ctx, env, user);
+      return;
+    }
+    if (data.startsWith('program:')) {
+      // Формат: program:<sub>:<key>[:<mode>] — раздел 16 ТЗ, отдельный от общего callbackData,
+      // так как несёт programKey (строка), а не числовой id + kind.
+      const parts = data.split(':');
+      const sub = parts[1];
+      const key = parts[2] ?? '';
+      switch (sub) {
+        case 'view':
+          await ctx.answerCallbackQuery();
+          await showProgramCard(ctx, env, user, key);
+          return;
+        case 'install':
+          await handleInstall(ctx, env, user, key, parts[3] ?? '');
+          return;
+        case 'disable':
+          await showDisableConfirm(ctx, env, user, key);
+          return;
+        case 'disable_yes':
+          await handleDisableYes(ctx, env, user, key);
+          return;
+        case 'disable_no':
+          await handleDisableNo(ctx, env, user, key);
+          return;
+        default:
+          await ctx.answerCallbackQuery({ text: 'Устаревшая кнопка' });
+          return;
+      }
     }
 
     // Структурированные действия над задачами: "action:kind:id" или "action:payload"

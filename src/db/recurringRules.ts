@@ -1,16 +1,26 @@
 import type { Env, RecurringRule, RuleType, TaskInstance, TaskStatus } from '../types.js';
 import { weekdayOf } from '../lib/timezone.js';
 
+export type CreateRuleOptions = {
+  description?: string;
+  weekdays?: number[];
+  weeklyDay?: number;
+  startsOn?: string | null;
+  programEnrollmentId?: number | null;
+  programItemKey?: string | null;
+};
+
 export async function createRule(
   env: Env,
   userId: number,
   title: string,
   ruleType: RuleType,
-  opts: { description?: string; weekdays?: number[]; weeklyDay?: number } = {},
+  opts: CreateRuleOptions = {},
 ): Promise<RecurringRule> {
   const res = await env.DB.prepare(
-    `INSERT INTO recurring_rules (user_id, title, description, rule_type, weekdays, weekly_day)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO recurring_rules
+       (user_id, title, description, rule_type, weekdays, weekly_day, starts_on, program_enrollment_id, program_item_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       userId,
@@ -19,12 +29,42 @@ export async function createRule(
       ruleType,
       opts.weekdays ? opts.weekdays.join(',') : null,
       opts.weeklyDay ?? null,
+      opts.startsOn ?? null,
+      opts.programEnrollmentId ?? null,
+      opts.programItemKey ?? null,
     )
     .run();
   const id = Number(res.meta.last_row_id);
   const rule = await env.DB.prepare('SELECT * FROM recurring_rules WHERE id = ?').bind(id).first<RecurringRule>();
   if (!rule) throw new Error('Failed to create rule');
   return rule;
+}
+
+/** Подготовленный statement для createRule — нужен для DB.batch() при установке программ.
+ *  OR IGNORE — подстраховка от дублей при повторной установке (раздел 14.8 ТЗ),
+ *  сработает благодаря частичному уникальному индексу idx_recurring_program_item. */
+export function createRuleStatement(
+  env: Env,
+  userId: number,
+  title: string,
+  ruleType: RuleType,
+  opts: CreateRuleOptions = {},
+): D1PreparedStatement {
+  return env.DB.prepare(
+    `INSERT OR IGNORE INTO recurring_rules
+       (user_id, title, description, rule_type, weekdays, weekly_day, starts_on, program_enrollment_id, program_item_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    userId,
+    title,
+    opts.description ?? null,
+    ruleType,
+    opts.weekdays ? opts.weekdays.join(',') : null,
+    opts.weeklyDay ?? null,
+    opts.startsOn ?? null,
+    opts.programEnrollmentId ?? null,
+    opts.programItemKey ?? null,
+  );
 }
 
 /** Проверяет владельца — не доверяем ID правила без сверки user_id (раздел 45 ТЗ). */
@@ -46,6 +86,24 @@ export async function deactivateRule(env: Env, userId: number, ruleId: number): 
   return res.meta.changes > 0;
 }
 
+/** Все правила (включая уже неактивные) конкретного enrollment — для отключения программы. */
+export async function getRulesForEnrollment(env: Env, enrollmentId: number): Promise<RecurringRule[]> {
+  const { results } = await env.DB.prepare('SELECT * FROM recurring_rules WHERE program_enrollment_id = ?')
+    .bind(enrollmentId)
+    .all<RecurringRule>();
+  return results;
+}
+
+/** Деактивирует все правила enrollment'а одним запросом — используется при отключении программы. */
+export async function deactivateRulesForEnrollment(env: Env, enrollmentId: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE recurring_rules SET is_active = 0, deleted_at = datetime('now')
+     WHERE program_enrollment_id = ? AND is_active = 1`,
+  )
+    .bind(enrollmentId)
+    .run();
+}
+
 export async function getActiveRulesForUser(env: Env, userId: number): Promise<RecurringRule[]> {
   const { results } = await env.DB.prepare(
     `SELECT * FROM recurring_rules WHERE user_id = ? AND is_active = 1 AND deleted_at IS NULL`,
@@ -55,8 +113,11 @@ export async function getActiveRulesForUser(env: Env, userId: number): Promise<R
   return results;
 }
 
-/** Применимо ли правило к дате dateStr (по дню недели в TZ пользователя). */
+/** Применимо ли правило к дате dateStr (по дню недели в TZ пользователя, с учётом даты начала). */
 export function ruleAppliesToDate(rule: RecurringRule, dateStr: string, timezone: string): boolean {
+  if (rule.starts_on && dateStr < rule.starts_on) {
+    return false;
+  }
   if (rule.rule_type === 'daily') return true;
   const wd = weekdayOf(dateStr, timezone);
   if (rule.rule_type === 'weekdays') {

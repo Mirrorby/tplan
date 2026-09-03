@@ -52,6 +52,17 @@ export function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Ближайший понедельник, начиная с сегодня (если сегодня понедельник — возвращает сегодня).
+ * Считает календарными датами, а не прибавлением фиксированного количества миллисекунд —
+ * важно из-за перехода на летнее/зимнее время в некоторых часовых поясах.
+ */
+export function nextMondayOrToday(todayStr: string, timezone: string): string {
+  const wd = weekdayOf(todayStr, timezone); // 0=вс, 1=пн ... 6=сб
+  const daysUntilMonday = (8 - wd) % 7; // wd=1 (пн) -> 0
+  return addDays(todayStr, daysUntilMonday);
+}
+
 const WEEKDAY_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 const MONTH_RU = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',

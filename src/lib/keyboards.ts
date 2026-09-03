@@ -1,5 +1,5 @@
 import { InlineKeyboard } from 'grammy';
-import type { PlanItem, RecurringRule } from '../types.js';
+import type { PlanItem, ProgramKey, RecurringRule } from '../types.js';
 import { encode, encodeWithPayload } from './callbackData.js';
 
 const RULE_TYPE_LABEL: Record<string, string> = {
@@ -24,13 +24,13 @@ export function renderPlanText(title: string, items: PlanItem[]): string {
   return `${title}\n\n${lines.join('\n')}\n\nЗадач: ${items.length}`;
 }
 
-/** Клавиатура под планом дня: по кнопке на каждую невыполненную задачу + управляющие кнопки. */
+/** Клавиатура под планом дня: кнопки "открыть" + "выполнить" на каждую невыполненную задачу. */
 export function planKeyboard(items: PlanItem[]): InlineKeyboard {
   const kb = new InlineKeyboard();
   for (const item of items) {
     if (item.status !== 'pending') continue;
     const kind = item.kind === 'task' ? 'task' : 'inst';
-    kb.text(`✅ ${item.title}`, encode('done', kind, item.id)).row();
+    kb.text(`📖 ${item.title}`, encode('open', kind, item.id)).text('✅', encode('done', kind, item.id)).row();
   }
   kb.text('➕ Добавить', 'add').text('📅 План', encodeWithPayload('view_day', 'menu'));
   return kb;
@@ -93,5 +93,48 @@ export function mainMenuKeyboard(): InlineKeyboard {
     .text('📅 План', encodeWithPayload('view_day', 'week'))
     .text('🔁 Повторяющиеся', 'rules')
     .row()
+    .text('📚 Программы', 'programs')
     .text('⚙️ Настройки', 'settings');
+}
+
+// ============ Готовые программы ============
+
+export function programsListKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('🏋️ Домашние тренировки', 'program:view:home_workouts_v1')
+    .row()
+    .text('🧘 Медитация для новичка', 'program:view:meditation_beginner_v1')
+    .row()
+    .text('⬅️ Назад', 'back');
+}
+
+/** Карточка ещё не установленной программы: выбор старта. */
+export function programCatalogCardKeyboard(key: ProgramKey): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('Начать сегодня', `program:install:${key}:today`)
+    .row()
+    .text('Начать с понедельника', `program:install:${key}:monday`)
+    .row()
+    .text('⬅️ Назад', 'programs');
+}
+
+/** Карточка уже установленной программы — вместо кнопок старта показываем отключение. */
+export function programInstalledCardKeyboard(key: ProgramKey): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('Отключить программу', `program:disable:${key}`)
+    .row()
+    .text('⬅️ Назад', 'programs');
+}
+
+export function programInstallSuccessKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('📋 Открыть план', encodeWithPayload('view_day', 'today'))
+    .row()
+    .text('📚 Другие программы', 'programs');
+}
+
+export function programDisableConfirmKeyboard(key: ProgramKey): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('Да, отключить', `program:disable_yes:${key}`)
+    .text('Нет', `program:disable_no:${key}`);
 }
